@@ -10,6 +10,7 @@ Departments:
 - Guest WiFi
 """
 
+import os
 from mininet.topo import Topo
 from mininet.net import Mininet
 from mininet.node import RemoteController, OVSKernelSwitch
@@ -72,6 +73,24 @@ class HospitalTopo(Topo):
         self.addLink(h_guest2, s_guest)
 
 
+def configure_qos():
+    info('*** Configuring OVS QoS Queues on s2-eth1 (Datacenter to Core)\n')
+    # Clear existing QoS
+    os.system("ovs-vsctl clear Port s2-eth1 qos")
+    # Create linux-htb QoS with 3 queues
+    # q0: Default (10Mbps min, 100Mbps max)
+    # q1: High Priority / Medical (50Mbps min, 100Mbps max)
+    # q2: Low Priority / IoT (Max 1Mbps)
+    cmd = (
+        "ovs-vsctl -- set Port s2-eth1 qos=@newqos -- "
+        "--id=@newqos create QoS type=linux-htb other-config:max-rate=100000000 queues=0=@q0,1=@q1,2=@q2 -- "
+        "--id=@q0 create Queue other-config:min-rate=10000000 other-config:max-rate=100000000 -- "
+        "--id=@q1 create Queue other-config:min-rate=50000000 other-config:max-rate=100000000 -- "
+        "--id=@q2 create Queue other-config:max-rate=1000000"
+    )
+    os.system(cmd)
+
+
 def run_custom_topo():
     topo = HospitalTopo()
     
@@ -80,6 +99,9 @@ def run_custom_topo():
     
     info('*** Starting network\n')
     net.start()
+    
+    # Apply QoS settings after switches are started
+    configure_qos()
     
     info('*** Running CLI\n')
     CLI(net)

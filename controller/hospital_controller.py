@@ -35,6 +35,34 @@ class HospitalController(app_manager.RyuApp):
         # Proactive Firewall Rules
         self.install_firewall_rules(datapath)
 
+        # Proactive QoS Rules (Only on Datacenter Switch - DPID 2)
+        if datapath.id == 2:
+            self.install_qos_rules(datapath)
+
+    def install_qos_rules(self, datapath):
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+
+        # Subnets
+        SUBNET_MED = ('10.0.2.0', '255.255.255.0')
+        SUBNET_IOT = ('10.0.4.0', '255.255.255.0')
+
+        # Port 1 on s2 connects to s_core
+        OUT_PORT = 1
+        QOS_PRIORITY = 20
+
+        # IoT Traffic -> Queue 2 (Throttled)
+        match_iot = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, ipv4_dst=SUBNET_IOT)
+        actions_iot = [parser.OFPActionSetQueue(2), parser.OFPActionOutput(OUT_PORT)]
+        self.add_flow(datapath, QOS_PRIORITY, match_iot, actions_iot)
+
+        # Medical Traffic -> Queue 1 (High Priority)
+        match_med = parser.OFPMatch(eth_type=ether_types.ETH_TYPE_IP, ipv4_dst=SUBNET_MED)
+        actions_med = [parser.OFPActionSetQueue(1), parser.OFPActionOutput(OUT_PORT)]
+        self.add_flow(datapath, QOS_PRIORITY, match_med, actions_med)
+
+        self.logger.info("QoS rules installed on switch %s", datapath.id)
+
     def install_firewall_rules(self, datapath):
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
