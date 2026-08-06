@@ -1,0 +1,5 @@
+Traffic_Type,Phase,Bandwidth_Mbps
+Medical (Queue 1),Before,0.0
+IoT (Queue 2),Before,0.0
+Medical (Queue 1),After,0.0
+IoT (Queue 2),After,0.0
