@@ -15,6 +15,13 @@ The network is divided into several logical zones (VLANs equivalent):
 *   **IoT/Medical Devices**: MRI machines, monitors (Strictly isolated, only accesses Medical DB).
 *   **Guest WiFi**: Public internet access for visitors (Isolated from all internal hospital networks).
 
+> **Network model**: All hosts share a flat L2 fabric on `10.0.0.0/16` (every host
+> uses a `/16` netmask). Zones are **not** separated by IP routing — they are
+> enforced purely by the SDN flow rules installed by the controller (see below).
+> Because the fabric is flat, traffic between any two hosts actually reaches the
+> switches, where the firewall drops and QoS queueing take effect. This is what
+> makes the `Network is unreachable` problem disappear without adding a router.
+
 ## Security & QoS Policies
 
 The Ryu controller enforces the following rules using OpenFlow and OVS Queues:
@@ -144,7 +151,7 @@ Once the Mininet CLI (`mininet>`) is available, you can run tests to verify the 
 
 *   **Test Admin access to Admin Server (Should Succeed):**
     ```
-    mininet> h_admin1 ping -c 3 h_admin_srv
+    mininet> h_admin1 ping -c 3 h_adm_srv
     ```
 
 *   **Test Guest isolation (Should Fail to reach internal servers):**
@@ -156,7 +163,7 @@ Once the Mininet CLI (`mininet>`) is available, you can run tests to verify the 
 *   **Test IoT isolation (Should Succeed to Med Srv, Fail to Admin):**
     ```
     mininet> h_mri1 ping -c 3 h_med_srv
-    mininet> h_mri1 ping -c 3 h_admin_srv
+    mininet> h_mri1 ping -c 3 h_adm_srv
     ```
 
 ## How to Change Things (live demo cheat sheet)

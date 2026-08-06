@@ -39,36 +39,36 @@ class HospitalTopo(Topo):
 
         # Datacenter Hosts
         # 10.0.1.X - Datacenter
-        h_med_srv = self.addHost('h_med_srv', ip='10.0.1.10/24', mac='00:00:00:00:01:10')
-        h_admin_srv = self.addHost('h_admin_srv', ip='10.0.1.20/24', mac='00:00:00:00:01:20')
+        h_med_srv = self.addHost('h_med_srv', ip='10.0.1.10/16', mac='00:00:00:00:01:10')
+        h_adm_srv = self.addHost('h_adm_srv', ip='10.0.1.20/16', mac='00:00:00:00:01:20')
         self.addLink(h_med_srv, s_dc)
-        self.addLink(h_admin_srv, s_dc)
+        self.addLink(h_adm_srv, s_dc)
 
         # Medical Department Hosts
         # 10.0.2.X - Medical
-        h_doc1 = self.addHost('h_doc1', ip='10.0.2.11/24', mac='00:00:00:00:02:11')
-        h_nurse1 = self.addHost('h_nurse1', ip='10.0.2.12/24', mac='00:00:00:00:02:12')
+        h_doc1 = self.addHost('h_doc1', ip='10.0.2.11/16', mac='00:00:00:00:02:11')
+        h_nurse1 = self.addHost('h_nurse1', ip='10.0.2.12/16', mac='00:00:00:00:02:12')
         self.addLink(h_doc1, s_med)
         self.addLink(h_nurse1, s_med)
 
         # Admin Department Hosts
         # 10.0.3.X - Admin
-        h_admin1 = self.addHost('h_admin1', ip='10.0.3.11/24', mac='00:00:00:00:03:11')
-        h_hr1 = self.addHost('h_hr1', ip='10.0.3.12/24', mac='00:00:00:00:03:12')
+        h_admin1 = self.addHost('h_admin1', ip='10.0.3.11/16', mac='00:00:00:00:03:11')
+        h_hr1 = self.addHost('h_hr1', ip='10.0.3.12/16', mac='00:00:00:00:03:12')
         self.addLink(h_admin1, s_admin)
         self.addLink(h_hr1, s_admin)
 
         # IoT/Medical Devices Hosts
         # 10.0.4.X - IoT
-        h_mri1 = self.addHost('h_mri1', ip='10.0.4.11/24', mac='00:00:00:00:04:11')
-        h_monitor1 = self.addHost('h_monitor1', ip='10.0.4.12/24', mac='00:00:00:00:04:12')
+        h_mri1 = self.addHost('h_mri1', ip='10.0.4.11/16', mac='00:00:00:00:04:11')
+        h_monitor1 = self.addHost('h_monitor1', ip='10.0.4.12/16', mac='00:00:00:00:04:12')
         self.addLink(h_mri1, s_iot)
         self.addLink(h_monitor1, s_iot)
 
         # Guest WiFi Hosts
         # 10.0.5.X - Guest
-        h_guest1 = self.addHost('h_guest1', ip='10.0.5.11/24', mac='00:00:00:00:05:11')
-        h_guest2 = self.addHost('h_guest2', ip='10.0.5.12/24', mac='00:00:00:00:05:12')
+        h_guest1 = self.addHost('h_guest1', ip='10.0.5.11/16', mac='00:00:00:00:05:11')
+        h_guest2 = self.addHost('h_guest2', ip='10.0.5.12/16', mac='00:00:00:00:05:12')
         self.addLink(h_guest1, s_guest)
         self.addLink(h_guest2, s_guest)
 
