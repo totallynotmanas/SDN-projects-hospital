@@ -104,7 +104,18 @@ To demonstrate **manual rule insertion** at runtime, use the REST API that
     ```
 
 For a guided, interactive version of this demo run `scripts/demo_manual_flows.sh`
-in a separate terminal while the network is up.
+(a scripted walkthrough with pauses).
+
+For an **interactive arrow-key console**, run `scripts/flow_console.py` in a
+separate terminal while the controller and Mininet are up:
+
+```bash
+python3 scripts/flow_console.py
+```
+
+It lets you browse live flows, add/delete preset rules (drop rules + QoS
+`set_queue` rules), add fully custom rules, and view a host/zone cheat-sheet —
+all through the REST API (Up/Down to move, Enter to select, `q` to go back).
 
 ## Automated QoS Evaluation (Lab Rubric Points 3, 4, 5)
 
