@@ -1,6 +1,4 @@
 __pycache__/
 *.pyc
 pcap/
-qos_results.csv
-qos_comparison.png
 ryu_controller.log
