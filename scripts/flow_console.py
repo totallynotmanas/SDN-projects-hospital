@@ -162,30 +162,87 @@ def delete_flow(dpid, priority, match):
     return api_post("/stats/flowentry/delete", payload)
 
 
-def describe_flow(flow):
-    """Turn a flow dict from the stats API into a short readable label."""
-    match = flow.get("match", {})
-    src = match.get("ipv4_src") or "*"
-    dst = match.get("ipv4_dst") or "*"
-    label = f"prio {flow.get('priority', 0):<3}  {src:>12} -> {dst:<12}"
+def _host_name(ip):
+    """Return the host name for a known IP, else None."""
+    for name, addr in HOSTS.items():
+        if addr == ip:
+            return name
+    return None
 
-    actions = []
+
+def _zone_name(network):
+    """Return the zone name for a known subnet network IP, else None."""
+    for zone, subnet in SUBNETS.items():
+        if subnet.split("/")[0] == network:
+            return zone
+    return None
+
+
+def _pretty_addr(value):
+    """Resolve an IP/subnet to a host/zone name when known, else raw value."""
+    if value is None:
+        return "*"
+    ip = str(value).split("/")[0]
+    return _host_name(ip) or _zone_name(ip) or str(value)
+
+
+def _describe_actions(flow):
+    """Read the action list as the stats API returns it (strings or dicts)."""
+    actions = flow.get("actions")
+    if isinstance(actions, list):
+        return " + ".join(str(a) for a in actions) if actions else "DROP"
+
+    parts = []
     for instruction in flow.get("instructions", []):
         for action in instruction.get("actions", []):
             kind = action.get("type")
             if kind == "OUTPUT":
-                actions.append(f"output:{action.get('port')}")
+                parts.append(f"output:{action.get('port')}")
             elif kind == "SET_QUEUE":
-                actions.append(f"queue:{action.get('queue_id')}")
-    if not actions:
-        actions.append("DROP")
+                parts.append(f"queue:{action.get('queue_id')}")
+    return " + ".join(parts) if parts else "DROP"
 
-    return f"{label}  [{' + '.join(actions)}]"
+
+def describe_flow(flow):
+    """Turn a flow dict from the stats API into a short readable label."""
+    match = flow.get("match", {})
+    # The REST API reports IPv4 matches under the legacy nw_src/nw_dst keys.
+    src = match.get("ipv4_src") or match.get("nw_src")
+    dst = match.get("ipv4_dst") or match.get("nw_dst")
+
+    if src is None and dst is None:
+        # L2 learning flows match on MACs instead of IPs.
+        mac_src = match.get("dl_src")
+        mac_dst = match.get("dl_dst")
+        if mac_src or mac_dst:
+            src, dst = str(mac_src), str(mac_dst)
+
+    label = f"prio {flow.get('priority', 0):<3}  {_pretty_addr(src):>12} -> {_pretty_addr(dst):<12}"
+    return f"{label}  [{_describe_actions(flow)}]"
 
 
 # ---------------------------------------------------------------------------
 # Curses UI helpers
 # ---------------------------------------------------------------------------
+
+COLOR_READY = False
+
+
+def init_colors():
+    """Enable colors so text renders crisp white instead of terminal-default grey."""
+    global COLOR_READY
+    if not curses.has_colors():
+        return
+    curses.start_color()
+    curses.use_default_colors()
+    curses.init_pair(1, curses.COLOR_WHITE, -1)  # body text
+    curses.init_pair(2, curses.COLOR_WHITE, -1)  # selection base
+    COLOR_READY = True
+
+
+def with_color(attr):
+    """Add the white foreground pair to `attr` when colors are available."""
+    return curses.color_pair(1) | attr if COLOR_READY else attr
 
 
 def arrow_menu(screen, title, options):
@@ -193,11 +250,11 @@ def arrow_menu(screen, title, options):
     selected = 0
     while True:
         screen.clear()
-        screen.addstr(0, 0, title, curses.A_BOLD)
+        screen.addstr(0, 0, title, with_color(curses.A_BOLD))
         for i, option in enumerate(options):
             marker, style = ("> ", curses.A_REVERSE) if i == selected else ("  ", curses.A_NORMAL)
-            screen.addstr(i + 1, 0, marker + option[:70], style)
-        screen.addstr(len(options) + 2, 0, "Up/Down move | Enter select | q back", curses.A_DIM)
+            screen.addstr(i + 1, 0, marker + option[:70], with_color(style))
+        screen.addstr(len(options) + 2, 0, "Up/Down move | Enter select | q back", with_color(curses.A_DIM))
         screen.refresh()
 
         key = screen.getch()
@@ -215,8 +272,8 @@ def pause_screen(screen, lines):
     """Show a block of text and wait for any keypress."""
     screen.clear()
     for i, line in enumerate(lines):
-        screen.addstr(i, 0, str(line)[:78])
-    screen.addstr(len(lines) + 1, 0, "[ press any key to continue ]", curses.A_DIM)
+        screen.addstr(i, 0, str(line)[:78], with_color(curses.A_NORMAL))
+    screen.addstr(len(lines) + 1, 0, "[ press any key to continue ]", with_color(curses.A_DIM))
     screen.refresh()
     screen.getch()
 
@@ -224,7 +281,7 @@ def pause_screen(screen, lines):
 def prompt_text(screen, prompt, default=""):
     """Read a single line of text from the user."""
     hint = f" [{default}]" if default else ""
-    screen.addstr(0, 0, prompt + hint + " ")
+    screen.addstr(0, 0, prompt + hint + " ", with_color(curses.A_NORMAL))
     screen.clrtoeol()
     screen.refresh()
     curses.echo()
@@ -393,6 +450,7 @@ MAIN_MENU = [
 
 def run(screen):
     screen.keypad(True)
+    init_colors()
     while True:
         labels = [item[0] for item in MAIN_MENU]
         picked = arrow_menu(screen, "FLOW CONSOLE - Hospital SDN", labels)
