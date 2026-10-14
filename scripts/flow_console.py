@@ -35,6 +35,7 @@ HOSTS = {
     "h_monitor1": "10.0.4.12",
     "h_guest1": "10.0.5.11",
     "h_guest2": "10.0.5.12",
+    "h_quar": "10.0.99.10",
 }
 
 SUBNETS = {
@@ -430,7 +431,94 @@ def handle_cheat_sheet(screen):
     lines += [f"{name:<12} {ip}" for name, ip in HOSTS.items()]
     lines += ["", "Zones (firewall/QoS rules match these subnets):"]
     lines += [f"{zone:<12} {subnet}" for zone, subnet in SUBNETS.items()]
+    lines += ["", "Quarantine Zone:"]
+    lines += [f"{'Honeypot':<12} 10.0.99.10 (s1-eth7)"]
     pause_screen(screen, lines)
+
+
+def handle_code_blue_menu(screen):
+    options = [
+        "1. Activate CODE BLUE (Unit: ICU_Room_1)",
+        "2. Activate CODE BLUE (Custom Unit)",
+        "3. Resolve Emergency (Restore Baseline)",
+        "4. View Emergency Status",
+    ]
+    picked = arrow_menu(screen, "Code Blue - Dynamic QoS Preemption", options)
+    if picked is None:
+        return
+    try:
+        if "1. Activate" in picked:
+            api_post("/hospital/emergency", {"status": "CODE_BLUE", "unit": "ICU_Room_1"})
+            status = api_get("/hospital/emergency")
+            pause_screen(screen, [
+                "Emergency Activated!",
+                f"State: {json.dumps(status.get('emergency_state'))}",
+                "",
+                "OpenFlow Preemption Rules Installed:",
+                "  - ICU Telemetry -> Queue 3 (85 Mbps Ultra-Low Latency)",
+                "  - Admin Department -> Queue 2 (Throttled to 1 Mbps)",
+                "  - Guest WiFi -> Suspended / Dropped"
+            ])
+        elif "2. Activate" in picked:
+            unit = prompt_text(screen, "Enter unit name:", "ICU_Room_2")
+            api_post("/hospital/emergency", {"status": "CODE_BLUE", "unit": unit})
+            status = api_get("/hospital/emergency")
+            pause_screen(screen, ["Emergency Activated for " + unit, f"State: {json.dumps(status.get('emergency_state'))}"])
+        elif "3. Resolve" in picked:
+            api_post("/hospital/emergency", {"status": "RESOLVED"})
+            pause_screen(screen, ["Emergency RESOLVED.", "Baseline QoS and departmental rules restored."])
+        elif "4. View" in picked:
+            status = api_get("/hospital/emergency")
+            lines = ["Emergency Status:"] + json.dumps(status, indent=2).split("\n")
+            pause_screen(screen, lines)
+    except Exception as exc:
+        pause_screen(screen, ["Error contacting controller:", str(exc)])
+
+
+def handle_quarantine_menu(screen):
+    options = [
+        "1. View Quarantined IoMT Devices",
+        "2. Manually Quarantine IoMT Host (e.g. h_mri1)",
+        "3. Release IoMT Host from Quarantine",
+    ]
+    picked = arrow_menu(screen, "IoMT Anomaly Quarantine", options)
+    if picked is None:
+        return
+    try:
+        if "1. View" in picked:
+            data = api_get("/hospital/quarantine")
+            lines = ["IoMT Quarantine Registry:"] + json.dumps(data, indent=2).split("\n")
+            pause_screen(screen, lines)
+        elif "2. Manually" in picked:
+            ip = prompt_text(screen, "Enter host IP to quarantine:", "10.0.4.11")
+            api_post("/hospital/quarantine", {"host": ip, "action": "ISOLATE"})
+            pause_screen(screen, [f"Host {ip} Quarantined!", "Priority 90 drop rules installed on switches s5 and s1."])
+        elif "3. Release" in picked:
+            ip = prompt_text(screen, "Enter host IP to release:", "10.0.4.11")
+            api_post("/hospital/quarantine", {"host": ip, "action": "RELEASE"})
+            pause_screen(screen, [f"Host {ip} Released from Quarantine.", "Normal communication restored."])
+    except Exception as exc:
+        pause_screen(screen, ["Error contacting controller:", str(exc)])
+
+
+def handle_failover_menu(screen):
+    try:
+        data = api_get("/hospital/failover")
+        lines = [
+            "Sub-Millisecond Telemetry Resilience (Fast Failover):",
+            "",
+            "Controller Configuration:",
+        ] + json.dumps(data, indent=2).split("\n") + [
+            "",
+            "Datapath Implementation:",
+            "  Switch s2 (Datacenter) & Switch s1 (Core) use OpenFlow 1.3 OFPGT_FF.",
+            "  - Bucket 1 monitors primary aggregation link (port 1).",
+            "  - Bucket 2 monitors redundant backup link.",
+            "  If primary link drops, OVS switches in hardware (< 10 ms)."
+        ]
+        pause_screen(screen, lines)
+    except Exception as exc:
+        pause_screen(screen, ["Error contacting controller:", str(exc)])
 
 
 # ---------------------------------------------------------------------------
@@ -439,6 +527,9 @@ def handle_cheat_sheet(screen):
 
 MAIN_MENU = [
     ("List flows on a switch", handle_list_flows),
+    ("Code Blue: Trigger / Resolve Emergency", handle_code_blue_menu),
+    ("IoMT Security: Quarantine & Anomaly Defense", handle_quarantine_menu),
+    ("Resilience: Fast Failover Groups Inspection", handle_failover_menu),
     ("Add a preset rule", handle_add_preset),
     ("Add a custom rule", handle_custom_rule),
     ("Delete a rule (pick from live flows)", handle_delete_rule),
@@ -474,3 +565,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

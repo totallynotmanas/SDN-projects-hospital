@@ -1,5 +1,7 @@
 Traffic_Type,Phase,Bandwidth_Mbps
-Medical (Queue 1),Before,0.0
-IoT (Queue 2),Before,0.0
-Medical (Queue 1),After,0.0
-IoT (Queue 2),After,0.0
+Medical (Queue 1),Before,96862.145991
+IoT (Queue 2),Before,107957.178928
+Medical (Queue 1),After,38.014818
+IoT (Queue 2),After,0.972886
+Medical (Queue 1),Code_Blue,37.459736
+IoT (Queue 2),Code_Blue,0.972886

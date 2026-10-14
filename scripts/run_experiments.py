@@ -3,6 +3,8 @@ import time
 import os
 import csv
 import sys
+import json
+import urllib.request
 
 from mininet.net import Mininet
 from mininet.node import RemoteController, OVSKernelSwitch
@@ -15,8 +17,10 @@ PCAP_DIR = os.path.join(REPO_ROOT, 'pcap')
 CSV_FILE = os.path.join(REPO_ROOT, 'qos_results.csv')
 CONTROLLER_LOG = os.path.join(REPO_ROOT, 'ryu_controller.log')
 CONTROLLER_APP = os.path.join(REPO_ROOT, 'controller', 'hospital_controller.py')
-RYU_CMD = 'python -m ryu.cmd.manager'
+PYTHON_EXE = sys.executable
+RYU_CMD = f'{PYTHON_EXE} -m ryu.cmd.manager'
 MED_SRV_IP = '10.0.1.10'
+API_URL = 'http://127.0.0.1:8080/hospital/emergency'
 
 # Add parent directory to path to import topology
 sys.path.append(REPO_ROOT)
@@ -24,15 +28,26 @@ from topology.hospital_topo import HospitalTopo, configure_qos
 
 
 def start_controller():
-    info('*** Starting Ryu Controller (with REST API) in background...\n')
-    cmd = (f'{RYU_CMD} {CONTROLLER_APP} ryu.app.ofctl_rest '
+    info('*** Starting Ryu Controller (with REST API & WSGI) in background...\n')
+    cmd = (f'{RYU_CMD} --wsapi-host 0.0.0.0 --wsapi-port 8080 {CONTROLLER_APP} ryu.app.ofctl_rest '
            f'> {CONTROLLER_LOG} 2>&1 &')
     os.system(cmd)
     time.sleep(5)  # Wait for Ryu to initialize
 
 
 def stop_controller():
-    os.system(f'pkill -f {RYU_CMD}')
+    os.system("pkill -f 'ryu.cmd.manager' >/dev/null 2>&1 || true")
+
+
+def post_emergency(status, unit="ICU_Room_1"):
+    try:
+        payload = json.dumps({"status": status, "unit": unit}).encode('utf-8')
+        req = urllib.request.Request(API_URL, data=payload, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        info(f'[-] Error posting emergency: {e}\n')
+        return None
 
 
 def run_iperf(client, duration=5, reverse=False):
@@ -42,23 +57,28 @@ def run_iperf(client, duration=5, reverse=False):
     if res and len(res.strip().split(',')) > 8:
         try:
             bw_bps = int(res.strip().split(',')[-1])
-            return bw_bps / 1_000_000
+            return bw_bps / 1_000_000.0
         except ValueError:
             return 0.0
     return 0.0
 
 
 def start_tcpdump(host, pcap_path):
-    host.cmd(f'nohup tcpdump -i {host.name}-eth0 -w {pcap_path} '
-             '>/dev/null 2>&1 &')
+    # Capture up to 500 sample packets for Wireshark without exhausting disk space
+    host.cmd(f'nohup tcpdump -i {host.name}-eth0 -c 500 -w {pcap_path} >/dev/null 2>&1 &')
 
 
 def stop_tcpdump(host):
-    host.cmd('pkill -x tcpdump')
+    host.cmd('pkill -9 -x tcpdump >/dev/null 2>&1 || true')
+    os.system('sudo pkill -9 -x tcpdump >/dev/null 2>&1 || true')
 
 
 def run_experiments():
     setLogLevel('info')
+
+    # Ensure clean slate
+    os.system('sudo mn -c > /dev/null 2>&1 || true')
+    stop_controller()
 
     start_controller()
 
@@ -75,6 +95,7 @@ def run_experiments():
 
     h_med_srv = net.get('h_med_srv')
     h_doc1 = net.get('h_doc1')
+    h_admin1 = net.get('h_admin1')
     h_mri1 = net.get('h_mri1')
 
     info('*** Starting iperf server on Med Server...\n')
@@ -86,10 +107,6 @@ def run_experiments():
 
     # ============================================================
     # PHASE 1: BASELINE (BEFORE QoS queues are applied)
-    # NOTE: we use iperf in reverse mode (-R) because the controller's
-    # QoS rules match ipv4_dst and shape egress on s2 -> core (port 1).
-    # Reverse mode makes the SERVER (h_med_srv) the sender, so traffic
-    # actually hits the configured queues.
     # ============================================================
     info('*** PHASE 1: BASELINE (no QoS) - capturing packets...\n')
     base_pcap = os.path.join(PCAP_DIR, 'baseline_capture.pcap')
@@ -106,14 +123,14 @@ def run_experiments():
     results.append(('IoT (Queue 2)', 'Before', base_iot))
 
     # ============================================================
-    # Apply QoS queues (linux-htb on s2-eth1)
+    # Apply QoS queues (linux-htb on s2-eth1 and s2-eth2)
     # ============================================================
     info('*** Applying OVS QoS queues...\n')
     configure_qos()
-    time.sleep(3)  # Let queue configuration settle
+    time.sleep(3)
 
     # ============================================================
-    # PHASE 2: WITH QoS enforcement + packet capture
+    # PHASE 2: WITH Standard QoS enforcement + packet capture
     # ============================================================
     info('*** PHASE 2: WITH QoS - capturing packets...\n')
     qos_pcap = os.path.join(PCAP_DIR, 'qos_capture.pcap')
@@ -129,8 +146,25 @@ def run_experiments():
     results.append(('Medical (Queue 1)', 'After', qos_med))
     results.append(('IoT (Queue 2)', 'After', qos_iot))
 
+    # ============================================================
+    # PHASE 3: CODE BLUE Dynamic Preemption
+    # ============================================================
+    info('*** PHASE 3: CODE BLUE PREEMPTION - Triggering Emergency Event...\n')
+    post_emergency("CODE_BLUE", "ICU_Room_1")
+    time.sleep(2)
+
+    info('*** Running Bandwidth Test: Medical Telemetry (Preempted - Queue 3)...\n')
+    code_blue_med = run_iperf(h_doc1, reverse=True)
+
+    info('*** Resolving CODE BLUE Emergency...\n')
+    post_emergency("RESOLVED")
+    time.sleep(2)
+
+    results.append(('Medical (Queue 1)', 'Code_Blue', code_blue_med))
+    results.append(('IoT (Queue 2)', 'Code_Blue', qos_iot))
+
     info('*** Stopping iperf server...\n')
-    h_med_srv.cmd('pkill -x iperf')
+    h_med_srv.cmd('pkill -x iperf >/dev/null 2>&1 || true')
 
     info('*** Stopping network and controller...\n')
     net.stop()
@@ -146,7 +180,4 @@ def run_experiments():
 
 
 if __name__ == '__main__':
-    # Cleanup before starting
-    os.system('sudo mn -c > /dev/null 2>&1')
-    os.system(f'pkill -f {RYU_CMD}')
     run_experiments()
