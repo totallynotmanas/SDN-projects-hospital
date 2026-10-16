@@ -55,78 +55,179 @@ The controller organizes flow tables into a strict, conflict-free priority hiera
 
 ---
 
-## 💻 Running on macOS using Multipass
+## 💻 Operating System Guides: Linux, macOS & Windows
 
-Because Mininet relies on Linux network namespaces, Open vSwitch kernel modules, and virtual ethernet (`veth`) pairs, Mininet cannot run directly on the macOS Darwin kernel. A lightweight Ubuntu Multipass VM provides the ideal Linux virtualization environment.
+Mininet relies on Linux kernel primitives (network namespaces, Open vSwitch kernel modules, and virtual ethernet `veth` pairs). Below are the dedicated setup and execution guides for **Native Linux**, **macOS** (via Multipass), and **Windows** (via Multipass, WSL2, or VM).
 
-This repository includes **native macOS Multipass integration scripts** that handle VM provisioning, atomic code synchronization, and demo execution.
+---
 
-### Prerequisites on Mac
+### 🐧 1. Native Linux (Ubuntu 22.04 / 24.04 LTS or Debian)
 
-1. Install Multipass on macOS:
-   ```bash
-   brew install --cask multipass
-   ```
-   *(Or download the installer from [multipass.run](https://multipass.run/))*
+On Linux, Mininet and Ryu run natively on bare metal with direct kernel Open vSwitch integration.
 
-### Step 1: One-Time VM Provisioning
+#### One-Step Automated Setup
+From your terminal in the repository root:
+```bash
+sudo ./scripts/setup_linux.sh
+```
+*This installs Mininet, Open vSwitch, tcpdump, iperf, creates `~/venv` with `--system-site-packages` (so the system Mininet library is accessible), installs Ryu, Flask, Pandas, and Matplotlib, and makes all scripts executable.*
 
-Run the setup script from your macOS terminal:
+#### Manual Setup (Alternative)
+```bash
+sudo apt-get update -y
+sudo apt-get install -y mininet openvswitch-switch tcpdump iperf curl iproute2 python3-pip python3-venv python3-dev
+sudo systemctl enable --now openvswitch-switch
+python3 -m venv --system-site-packages ~/venv
+~/venv/bin/pip install --upgrade pip
+~/venv/bin/pip install ryu flask pandas matplotlib requests
+```
+
+#### Running on Linux
+```bash
+# 1. Start the interactive Mininet network + Ryu controller:
+sudo ./scripts/start_network.sh
+
+# 2. Run the standalone live demos with real network traffic:
+sudo ~/venv/bin/python3 scripts/demo_code_blue.py
+sudo ~/venv/bin/python3 scripts/demo_quarantine.py
+sudo ~/venv/bin/python3 scripts/demo_fast_failover.py
+
+# 3. Run the 12-point automated verification test suite:
+sudo ~/venv/bin/python3 scripts/test_mininet_connectivity.py
+
+# 4. Run full 3-phase QoS evaluation benchmarks (generates qos_comparison.png):
+sudo ~/venv/bin/python3 scripts/run_experiments.py
+
+# 5. Launch the interactive curses Flow Console:
+~/venv/bin/python3 scripts/flow_console.py
+```
+
+---
+
+### 🍏 2. macOS (via Multipass Ubuntu VM)
+
+Because macOS uses the Darwin kernel, Mininet is executed inside a lightweight, headless Ubuntu LTS Multipass VM.
+
+#### Prerequisites on Mac
+Install Multipass via Homebrew or official installer:
+```bash
+brew install --cask multipass
+```
+*(Or download from [multipass.run](https://multipass.run/))*
+
+#### One-Time VM Provisioning
 ```bash
 ./scripts/setup_multipass.sh
 ```
-*This verifies or launches an Ubuntu LTS VM (named `refined-pup` or `hospital-sdn`), installs Mininet, Open vSwitch, tcpdump, iperf, Ryu, Flask, matplotlib, and pandas, and synchronizes your codebase into `~/hospital-sdn`.*
+*Creates the Ubuntu LTS instance, provisions Open vSwitch, Mininet, Ryu, and Python packages, and syncs the repository.*
 
-### Step 2: One-Click Execution from macOS
-
+#### One-Click macOS Commands
 Use the `./scripts/run_multipass.sh` wrapper from your Mac terminal:
-
 ```bash
-# Display VM IP address and available REST endpoints
+# Display VM IP address and reachable REST endpoints
 ./scripts/run_multipass.sh info
 
-# Sync latest code from Mac to VM and launch Mininet CLI & Ryu
+# Sync code to VM and start interactive Mininet session & Ryu
 ./scripts/run_multipass.sh network
 
-# Run the Code Blue Dynamic QoS Preemption demo
+# Run the Code Blue Dynamic QoS Preemption demo (live iperf measurements)
 ./scripts/run_multipass.sh codeblue
 
-# Run the IoMT Anomaly Quarantine demo
+# Run the IoMT Anomaly Quarantine demo (live threat isolation)
 ./scripts/run_multipass.sh quarantine
 
-# Run the Fast Failover Sub-Millisecond Resilience demo
+# Run the Sub-Millisecond Fast Failover demo (cable break simulation)
 ./scripts/run_multipass.sh failover
 
-# Open the interactive curses Flow Console in VM
-./scripts/run_multipass.sh console
+# Run the 12-test automated integration suite
+./scripts/run_multipass.sh test
 
-# Run automated QoS benchmarks and fetch the chart (qos_comparison.png) to Mac
+# Run full QoS benchmarks & automatically copy qos_comparison.png to Mac host
 ./scripts/run_multipass.sh experiments
 
-# Drop into an interactive bash shell inside the VM
+# Launch the interactive arrow-key Flow Console
+./scripts/run_multipass.sh console
+
+# Open an interactive bash shell in the VM
 ./scripts/run_multipass.sh shell
 ```
 
-### Accessing the Controller REST API from your Mac Browser / Terminal
-
-Because Ryu binds to `0.0.0.0:8080`, you can query the controller directly from your Mac terminal using the VM's IP address:
-
+#### Accessing Controller REST API from Mac Terminal / Browser
 ```bash
-# Get your VM IP
 VM_IP=$(multipass info refined-pup | awk '/IPv4:/ {print $2}')
 
-# Query Emergency state
+# Query Code Blue Emergency status
 curl -s http://$VM_IP:8080/hospital/emergency | python3 -m json.tool
 
-# Query IoMT Quarantine state
+# Query IoMT Quarantine registry
 curl -s http://$VM_IP:8080/hospital/quarantine | python3 -m json.tool
 
 # Query Fast Failover configuration
 curl -s http://$VM_IP:8080/hospital/failover | python3 -m json.tool
 
-# Dump live switch flows (Switch 1 / Core)
+# Dump live flows on Core switch s1
 curl -s http://$VM_IP:8080/stats/flow/1 | python3 -m json.tool
 ```
+
+---
+
+### 🪟 3. Windows (Multipass, WSL 2, or VirtualBox)
+
+Windows users have three robust options depending on their preferred workflow.
+
+#### Option A: Multipass for Windows (Recommended — 1-to-1 Parity with Mac)
+Multipass on Windows provides full native Linux kernel Open vSwitch and Linux-HTB QoS support, with zero manual Linux kernel configuration.
+
+1. **Install Multipass on Windows**:
+   Open PowerShell as Administrator and run:
+   ```powershell
+   winget install Canonical.Multipass
+   ```
+   *(Or download the installer from [multipass.run](https://multipass.run/))*
+
+2. **One-Click Commands via PowerShell**:
+   Open PowerShell in the cloned repository directory:
+   ```powershell
+   # Display VM IP and REST endpoints
+   .\scripts\run_multipass.ps1 info
+
+   # Start interactive Mininet & Ryu controller
+   .\scripts\run_multipass.ps1 network
+
+   # Run feature demonstrations with live traffic
+   .\scripts\run_multipass.ps1 codeblue
+   .\scripts\run_multipass.ps1 quarantine
+   .\scripts\run_multipass.ps1 failover
+
+   # Run 12-test automated verification suite
+   .\scripts\run_multipass.ps1 test
+
+   # Run QoS benchmarks & automatically copy chart & CSV to Windows folder
+   .\scripts\run_multipass.ps1 experiments
+
+   # Launch interactive Flow Console
+   .\scripts\run_multipass.ps1 console
+
+   # Open interactive bash shell inside the VM
+   .\scripts\run_multipass.ps1 shell
+   ```
+   *(Note: If using Git Bash on Windows, you can also run `./scripts/run_multipass.sh <command>` directly!)*
+
+#### Option B: Standalone Ubuntu VM (VirtualBox / VMware Player)
+1. Download [Ubuntu 24.04 LTS Desktop/Server ISO](https://ubuntu.com/download/desktop).
+2. Create a VM in VirtualBox or VMware Player (2 vCPUs, 3 GB RAM, 15 GB disk, Bridged or NAT network).
+3. Clone this repository inside the VM and run:
+   ```bash
+   sudo ./scripts/setup_linux.sh
+   ```
+4. Run all tests and demos using the standard [Native Linux commands](#-1-native-linux-ubuntu-2204--2404-lts-or-debian).
+
+#### Option C: Windows Subsystem for Linux (WSL 2)
+> [!NOTE]
+> Standard WSL 2 distributions use a specialized Microsoft kernel that omits standard Open vSwitch kernel modules (`openvswitch.ko`).
+> * If using WSL 2, you can either:
+>   1. Run Mininet with userspace switching: `mininet --switch user` (functional for L2 forwarding, but lacks kernel-level Linux-HTB hardware queues).
+>   2. Or install Multipass on Windows (Option A) or a VirtualBox VM (Option B) for 100% hardware-accurate kernel OVS and HTB QoS performance.
 
 ---
 
@@ -134,10 +235,20 @@ curl -s http://$VM_IP:8080/stats/flow/1 | python3 -m json.tool
 
 ### Demo 1: "Code Blue" Event-Driven Dynamic QoS Preemption
 
-Run the interactive walkthrough:
-```bash
-./scripts/run_multipass.sh codeblue
-```
+Run the interactive walkthrough with live iperf traffic:
+* **Linux (Native)**:
+  ```bash
+  sudo ~/venv/bin/python3 scripts/demo_code_blue.py
+  ```
+* **macOS (Multipass)**:
+  ```bash
+  ./scripts/run_multipass.sh codeblue
+  ```
+* **Windows (PowerShell)**:
+  ```powershell
+  .\scripts\run_multipass.ps1 codeblue
+  ```
+
 Or trigger it manually via the CLI utility or `curl`:
 ```bash
 # 1. Trigger Code Blue
@@ -156,9 +267,19 @@ python3 scripts/trigger_code_blue.py RESOLVED
 ### Demo 2: Automated IoMT Anomaly Quarantine
 
 Run the automated walkthrough:
-```bash
-./scripts/run_multipass.sh quarantine
-```
+* **Linux (Native)**:
+  ```bash
+  sudo ~/venv/bin/python3 scripts/demo_quarantine.py
+  ```
+* **macOS (Multipass)**:
+  ```bash
+  ./scripts/run_multipass.sh quarantine
+  ```
+* **Windows (PowerShell)**:
+  ```powershell
+  .\scripts\run_multipass.ps1 quarantine
+  ```
+
 Or test via the REST API:
 ```bash
 # Manually isolate suspicious host
@@ -180,19 +301,37 @@ curl -s -X POST -H "Content-Type: application/json" \
 ### Demo 3: Sub-Millisecond Telemetry Resilience (Fast Failover)
 
 Run the fast failover demonstration:
-```bash
-./scripts/run_multipass.sh failover
-```
+* **Linux (Native)**:
+  ```bash
+  sudo ~/venv/bin/python3 scripts/demo_fast_failover.py
+  ```
+* **macOS (Multipass)**:
+  ```bash
+  ./scripts/run_multipass.sh failover
+  ```
+* **Windows (PowerShell)**:
+  ```powershell
+  .\scripts\run_multipass.ps1 failover
+  ```
 *Shows Group Table 1 (`OFPGT_FF`) with Bucket 1 (`watch_port=1`) and Bucket 2 (`watch_port=2`). Cuts primary interface `s2-eth1` and demonstrates uninterrupted ping delivery over backup interface `s2-eth2`.*
 
 ---
 
 ## 🧪 Comprehensive Automated Test Suite (12/12 Passing)
 
-Run the complete integration suite:
-```bash
-multipass exec refined-pup -- sudo PYTHONPATH=/usr/lib/python3/dist-packages:/home/ubuntu/hospital-sdn /home/ubuntu/venv/bin/python3 /home/ubuntu/hospital-sdn/scripts/test_mininet_connectivity.py
-```
+Run the complete integration suite across your platform:
+* **Linux (Native)**:
+  ```bash
+  sudo ~/venv/bin/python3 scripts/test_mininet_connectivity.py
+  ```
+* **macOS (Multipass)**:
+  ```bash
+  ./scripts/run_multipass.sh test
+  ```
+* **Windows (PowerShell)**:
+  ```powershell
+  .\scripts\run_multipass.ps1 test
+  ```
 
 ### Test Results Breakdown:
 * **Suite 1: Baseline Micro-segmentation & Firewall**
@@ -217,24 +356,45 @@ multipass exec refined-pup -- sudo PYTHONPATH=/usr/lib/python3/dist-packages:/ho
 ## 📊 Automated QoS Evaluation & Charts
 
 To measure bandwidth before and after QoS, and during Code Blue preemption:
-```bash
-./scripts/run_multipass.sh experiments
-```
+* **Linux (Native)**:
+  ```bash
+  sudo ~/venv/bin/python3 scripts/run_experiments.py
+  ```
+  *(Generates `qos_results.csv` and `qos_comparison.png` directly in your project root!)*
+* **macOS (Multipass)**:
+  ```bash
+  ./scripts/run_multipass.sh experiments
+  ```
+* **Windows (PowerShell)**:
+  ```powershell
+  .\scripts\run_multipass.ps1 experiments
+  ```
+
 This runs three benchmark phases:
 1. **Phase 1: Baseline (Unshaped)**: Measures baseline throughput without queues.
 2. **Phase 2: Standard QoS Enforced**: Medical guaranteed Queue 1; IoT throttled to Queue 2 (1 Mbps).
 3. **Phase 3: Code Blue Preemption Active**: ICU telemetry boosted to Queue 3; Admin and Guest throttled/dropped.
 
-The script automatically outputs `qos_results.csv` and renders `qos_comparison.png`, which is automatically copied to your macOS host!
+The runner automatically saves `qos_results.csv` and renders `qos_comparison.png` into your local directory.
 
 ---
 
 ## 🎮 Interactive Arrow-Key Flow Console
 
-Launch the interactive curses terminal console from Mac:
-```bash
-./scripts/run_multipass.sh console
-```
+Launch the interactive curses terminal console:
+* **Linux (Native)**:
+  ```bash
+  ~/venv/bin/python3 scripts/flow_console.py
+  ```
+* **macOS (Multipass)**:
+  ```bash
+  ./scripts/run_multipass.sh console
+  ```
+* **Windows (PowerShell)**:
+  ```powershell
+  .\scripts\run_multipass.ps1 console
+  ```
+
 Features:
 * Browse live flows across all 6 switches.
 * Trigger / Resolve **Code Blue** emergency states with arrow keys.
@@ -242,3 +402,4 @@ Features:
 * Inspect **Fast Failover** OpenFlow 1.3 Group tables.
 * Add and delete preset or custom OpenFlow rules.
 * View host IP and subnet cheat sheets.
+

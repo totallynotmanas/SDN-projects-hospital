@@ -1,7 +1,13 @@
 Traffic_Type,Phase,Bandwidth_Mbps
-Medical (Queue 1),Before,96862.145991
-IoT (Queue 2),Before,107957.178928
-Medical (Queue 1),After,38.014818
-IoT (Queue 2),After,0.972886
-Medical (Queue 1),Code_Blue,37.459736
-IoT (Queue 2),Code_Blue,0.972886
+ICU Telemetry,Before,1.33
+Admin Staff,Before,26.01
+IoT Devices,Before,3.8
+Guest WiFi,Before,9.8
+ICU Telemetry,After,31.49
+Admin Staff,After,13.69
+IoT Devices,After,0.98
+Guest WiFi,After,9.5
+ICU Telemetry,Code_Blue,33.99
+Admin Staff,Code_Blue,0.24
+IoT Devices,Code_Blue,0.98
+Guest WiFi,Code_Blue,0.0
